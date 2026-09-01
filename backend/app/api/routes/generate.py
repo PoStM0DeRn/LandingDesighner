@@ -5,10 +5,11 @@ import threading
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, UploadFile, File
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.auth import require_user
 from app.brandbook.parser import parse_brandbook
+from app.core.url_guard import validate_url, UrlNotAllowed
 from app.core.orchestrator import run_generation
 from app.models.schemas import GenerateResponse, LandingStatus
 from app.storage.local import create_landing
@@ -37,6 +38,9 @@ def _validated_workflow_path(raw: str | None) -> str | None:
     return str(resolved)
 
 
+MAX_WORKFLOW_BYTES = 1_000_000
+
+
 @router.post("/generate", response_model=GenerateResponse)
 async def generate(
     user: str = Depends(require_user),
@@ -49,14 +53,26 @@ async def generate(
     api_key: str = Form(""),
     skill_ids: str = Form("[]"),
     comfyui_workflow_path: str = Form(""),
+    comfyui_url: str = Form(""),
     image_steps: int = Form(20),
     use_llm_markup: str = Form("false"),
     brandbook: UploadFile | None = File(None),
+    workflow: UploadFile | None = File(None),
 ):
     landing_id = uuid.uuid4().hex[:12]
     parsed_tags = json.loads(tags) if tags else []
     parsed_skill_ids = json.loads(skill_ids) if skill_ids else []
     display_title = title or prompt[:50]
+
+    # --- user-supplied service URLs: SSRF guard ---------------------------
+    try:
+        comfy_url = validate_url(comfyui_url) if comfyui_url else None
+    except UrlNotAllowed as e:
+        raise HTTPException(status_code=400, detail=f"ComfyUI URL: {e}")
+    try:
+        llm_endpoint = validate_url(api_endpoint) if api_endpoint else None
+    except UrlNotAllowed as e:
+        raise HTTPException(status_code=400, detail=f"LM Studio URL: {e}")
 
     create_landing(
         landing_id=landing_id,
@@ -70,6 +86,22 @@ async def generate(
     )
 
     skills = get_skills_by_ids(parsed_skill_ids) if parsed_skill_ids else []
+
+    # --- visitor-supplied workflow file (takes priority over the path) ----
+    uploaded_workflow: str | None = None
+    if workflow and workflow.filename:
+        content = await workflow.read()
+        if len(content) > MAX_WORKFLOW_BYTES:
+            raise HTTPException(status_code=400, detail="Workflow слишком большой (максимум 1 МБ)")
+        try:
+            json.loads(content.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise HTTPException(status_code=400, detail=f"Workflow должен быть валидным JSON: {e}")
+        from app.storage.local import get_landing_dir
+        wf_path = get_landing_dir(landing_id) / "workflow.json"
+        wf_path.write_bytes(content)
+        uploaded_workflow = str(wf_path)
+        logger.info("Uploaded workflow for %s (%d bytes)", landing_id, len(content))
 
     brandbook_colors = None
     if brandbook and brandbook.filename:
@@ -89,12 +121,13 @@ async def generate(
         args=(
             landing_id, prompt, display_title, parsed_tags, brandbook_colors,
             provider, model,
-            api_endpoint or None,
+            llm_endpoint,
             api_key or None,
             skills,
-            _validated_workflow_path(comfyui_workflow_path),
+            uploaded_workflow or _validated_workflow_path(comfyui_workflow_path),
             image_steps,
             use_llm_markup.lower() in ("true", "1", "yes"),
+            comfy_url,
         ),
         daemon=True,
     )

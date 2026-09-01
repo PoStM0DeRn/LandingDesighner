@@ -50,6 +50,8 @@ export async function generateLanding(req: GenerateRequest): Promise<GenerateRes
   if (req.apiKey) formData.append('api_key', req.apiKey)
   formData.append('skill_ids', JSON.stringify(req.skillIds))
   if (req.comfyuiWorkflowPath) formData.append('comfyui_workflow_path', req.comfyuiWorkflowPath)
+  if (req.comfyuiUrl) formData.append('comfyui_url', req.comfyuiUrl)
+  if (req.workflow) formData.append('workflow', req.workflow)
   if (req.imageSteps != null) formData.append('image_steps', String(req.imageSteps))
   formData.append('use_llm_markup', String(req.useLlmMarkup ?? false))
   const { data } = await api.post('/generate', formData, {
@@ -106,6 +108,11 @@ export async function regenerateLandingSection(id: string, sectionType: string):
 
 export async function publishLanding(id: string, published: boolean): Promise<Landing> {
   const { data } = await api.post(`/landings/${id}/publish`, { published })
+  return data
+}
+
+export async function checkComfyui(url: string): Promise<{ ok: boolean; error?: string; checkpoints?: string[] }> {
+  const { data } = await api.post('/comfyui/check', { url }, { timeout: 20000 })
   return data
 }
 

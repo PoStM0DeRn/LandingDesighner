@@ -39,6 +39,8 @@ export interface GenerateRequest {
   apiKey?: string
   skillIds: string[]
   comfyuiWorkflowPath?: string
+  comfyuiUrl?: string
+  workflow?: File
   imageSteps?: number
   useLlmMarkup?: boolean
 }
@@ -90,6 +92,7 @@ export interface GenerationInfo {
   use_llm_markup: boolean
   image_steps: number | null
   comfyui_workflow_path: string | null
+  comfyui_url: string | null
   intent: {
     topic?: string
     style?: string

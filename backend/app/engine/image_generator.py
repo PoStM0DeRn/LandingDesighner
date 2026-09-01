@@ -59,6 +59,11 @@ def apply_fallback_images(sections: list[Section]) -> None:
     for section in sections:
         if section.type == SectionType.hero and not section.image_url:
             section.image_url = get_hero_image(section.title or "abstract")
+        if section.type in (SectionType.features, SectionType.services):
+            for item in section.items:
+                if not item.get("image_url"):
+                    title = item.get("title", "")
+                    item["image_url"] = get_hero_image(title or section.title or "feature")
         if section.type == SectionType.testimonials:
             for item in section.items:
                 if not item.get("image_url"):
@@ -66,24 +71,56 @@ def apply_fallback_images(sections: list[Section]) -> None:
                     if name:
                         item["image_url"] = get_testimonial_avatar(name)
 
+MAX_REQUESTS_PER_SECTION = 6
+
 
 def ensure_image_requests(sections: list[Section], topic: str) -> None:
-    """LLMs sometimes skip image_requests entirely. Guarantee coverage for
-    hero/about by synthesizing requests from section content when missing."""
+    """Guarantee image coverage.
+
+    1) LLMs sometimes skip image_requests entirely — synthesize for hero/about.
+    2) LLMs often send ONE request for a multi-card section instead of one per
+       card — top-up missing per-item requests so every card gets an image.
+    """
     for section in sections:
-        if not section.image_requests and not section.image_url:
+        reqs = section.image_requests
+        if not reqs and not section.image_url:
             if section.type == SectionType.hero:
-                section.image_requests.append(ImageRequest(
+                reqs.append(ImageRequest(
                     section_type="hero",
                     prompt=f"{topic}. {section.title}. high quality, detailed, no text",
                     width=1024, height=576, style="photo", seed=-1,
                 ))
             elif section.type == SectionType.about:
-                section.image_requests.append(ImageRequest(
+                reqs.append(ImageRequest(
                     section_type="about",
                     prompt=f"{topic}. {section.title or section.description[:80]}. high quality, detailed, no text",
                     width=1024, height=576, style="photo", seed=-1,
                 ))
+
+        # top-up per-item requests for card sections
+        if section.type in (SectionType.features, SectionType.services, SectionType.testimonials):
+            n_items = len(section.items)
+            if n_items:
+                have = len(reqs)
+                missing = min(n_items - have, MAX_REQUESTS_PER_SECTION - have)
+                for k in range(missing):
+                    item_idx = have + k
+                    item = section.items[item_idx] if item_idx < n_items else {}
+                    item_title = item.get("title", "") or f"item {item_idx + 1}"
+                    if section.type == SectionType.testimonials:
+                        reqs.append(ImageRequest(
+                            section_type="testimonials",
+                            section_index=item_idx,
+                            prompt=f"professional headshot portrait, studio lighting, neutral background, no text",
+                            width=256, height=256, style="photo", seed=-1,
+                        ))
+                    else:
+                        reqs.append(ImageRequest(
+                            section_type=section.type.value,
+                            section_index=item_idx,
+                            prompt=f"{topic}. {item_title}. clean product-style illustration, no text",
+                            width=768, height=512, style="illustration", seed=-1,
+                        ))
 
 
 async def generate_images_async(
@@ -151,6 +188,7 @@ def generate_images_sync(
     workflow_path: str | None = None,
     steps: int | None = None,
     landing_id: str | None = None,
+    comfyui_url: str | None = None,
 ) -> list[Section]:
     steps_value = steps if steps is not None else settings.image_default_steps
     if not settings.image_generation_enabled:
@@ -171,10 +209,19 @@ def generate_images_sync(
         from app.mcp.comfyui_api import ComfyUIClient
         from app.mcp.workflow import build_txt2img_workflow
 
-        client = ComfyUIClient()
+        # The visitor's own ComfyUI (or the server default when none given)
+        client = ComfyUIClient(base_url=comfyui_url)
 
         if not client.is_available_sync():
-            logger.warning("ComfyUI not available, using fallback images")
+            logger.warning(
+                "ComfyUI (%s) not available, using fallback images",
+                comfyui_url or settings.comfyui_url,
+            )
+            if landing_id:
+                # persist the warning for the whole run (messages get replaced by stages)
+                progress_tracker.update(
+                    landing_id, notice="ComfyUI недоступен — используются стоковые изображения",
+                )
             apply_fallback_images(sections)
             return sections
 
@@ -185,28 +232,36 @@ def generate_images_sync(
                 req.seed = random.randint(0, 2**32 - 1)
 
             full_prompt = build_image_prompt(req)
-            workflow = build_txt2img_workflow(
-                prompt=full_prompt,
-                width=req.width,
-                height=req.height,
-                steps=steps_value,
-                seed=req.seed,
-                style=req.style,
-                workflow_path=workflow_path,
-            )
 
-            try:
-                b64 = client.generate_sync(workflow)
-                if b64:
-                    data_uri = _to_webp_data_uri(b64)
-                    section = sections[s_idx]
-                    if req.section_type in ("hero", "about") or (i_idx == 0 and not section.image_url):
-                        section.image_url = data_uri
-                    if section.items and i_idx < len(section.items):
-                        section.items[i_idx]["image_url"] = data_uri
-                    logger.info("Generated image for %s[%d]", req.section_type, i_idx)
-            except Exception as e:
-                logger.warning("Failed to generate image for %s[%d]: %s", req.section_type, i_idx, e)
+            def _build_wf(seed_val: int) -> dict:
+                return build_txt2img_workflow(
+                    prompt=full_prompt,
+                    width=req.width,
+                    height=req.height,
+                    steps=steps_value,
+                    seed=seed_val,
+                    style=req.style,
+                    workflow_path=workflow_path,
+                )
+
+            b64 = None
+            for attempt in (1, 2):
+                try:
+                    b64 = client.generate_sync(_build_wf(req.seed))
+                    break
+                except Exception as e:
+                    logger.warning("Image %s[%d] attempt %d failed: %s", req.section_type, i_idx, attempt, e)
+                    if attempt == 1:
+                        req.seed = random.randint(0, 2**32 - 1)  # fresh seed on retry
+
+            if b64:
+                data_uri = _to_webp_data_uri(b64)
+                section = sections[s_idx]
+                if req.section_type in ("hero", "about") or (i_idx == 0 and not section.image_url):
+                    section.image_url = data_uri
+                if section.items and i_idx < len(section.items):
+                    section.items[i_idx]["image_url"] = data_uri
+                logger.info("Generated image for %s[%d]", req.section_type, i_idx)
 
     except Exception as e:
         logger.warning("ComfyUI client init failed: %s, using fallback", e)
@@ -219,15 +274,16 @@ def regenerate_single_image(
     req: ImageRequest,
     workflow_path: str | None = None,
     steps: int | None = None,
+    base_url: str | None = None,
 ) -> str | None:
     """Regenerate one image request and return a WebP data URI (None on failure)."""
     try:
         from app.mcp.comfyui_api import ComfyUIClient
         from app.mcp.workflow import build_txt2img_workflow
 
-        client = ComfyUIClient()
+        client = ComfyUIClient(base_url=base_url)
         if not client.is_available_sync():
-            logger.warning("ComfyUI not available, cannot regenerate image")
+            logger.warning("ComfyUI (%s) not available, cannot regenerate image", base_url or settings.comfyui_url)
             return None
 
         if req.seed < 0:

@@ -3,7 +3,12 @@ import io
 
 from PIL import Image
 
-from app.engine.image_generator import _to_webp_data_uri, ensure_image_requests
+from app.engine.image_generator import (
+    MAX_REQUESTS_PER_SECTION,
+    _to_webp_data_uri,
+    apply_fallback_images,
+    ensure_image_requests,
+)
 from app.models.schemas import ImageRequest, Section, SectionType
 
 
@@ -63,3 +68,66 @@ class TestEnsureImageRequests:
         sections = [Section(type=SectionType.cta, title="Go")]
         ensure_image_requests(sections, "topic")
         assert sections[0].image_requests == []
+
+
+class TestEnsureTopUp:
+    def test_features_top_up_to_item_count(self):
+        section = Section(
+            type=SectionType.features, title="F",
+            items=[{"title": "A"}, {"title": "B"}, {"title": "C"}],
+            image_requests=[ImageRequest(section_type="features", prompt="x", width=768, height=512)],
+        )
+        ensure_image_requests([section], "gym club")
+        assert len(section.image_requests) == 3
+        assert section.image_requests[1].section_index == 1
+        assert section.image_requests[2].section_index == 2
+        assert section.image_requests[1].width == 768 and section.image_requests[1].height == 512
+        assert "B" in section.image_requests[1].prompt
+
+    def test_testimonials_top_up_headshots(self):
+        section = Section(
+            type=SectionType.testimonials, title="T",
+            items=[{"title": "Ann"}, {"title": "Bob"}, {"title": "Cara"}],
+        )
+        ensure_image_requests([section], "topic")
+        assert len(section.image_requests) == 3
+        assert all(r.width == 256 and r.height == 256 for r in section.image_requests)
+        assert all(r.style == "photo" for r in section.image_requests)
+
+    def test_cap_limits_total(self):
+        items = [{"title": f"card {i}"} for i in range(10)]
+        section = Section(type=SectionType.features, title="F", items=items)
+        ensure_image_requests([section], "topic")
+        assert len(section.image_requests) == MAX_REQUESTS_PER_SECTION
+
+    def test_existing_full_coverage_not_touched(self):
+        reqs = [ImageRequest(section_type="features", prompt=f"p{i}", width=768, height=512) for i in range(3)]
+        section = Section(
+            type=SectionType.features, title="F",
+            items=[{"title": "A"}, {"title": "B"}, {"title": "C"}],
+            image_requests=list(reqs),
+        )
+        ensure_image_requests([section], "topic")
+        assert section.image_requests == reqs
+
+
+class TestCardFallback:
+    def test_features_items_get_stock_when_missing(self):
+        section = Section(type=SectionType.features, title="F", items=[{"title": "A"}, {"title": "B"}])
+        apply_fallback_images([section])
+        for item in section.items:
+            assert item["image_url"].startswith("https://picsum")
+
+    def test_real_images_not_overwritten(self):
+        section = Section(type=SectionType.features, title="F", items=[
+            {"title": "A", "image_url": "data:image/webp;base64,REAL"},
+            {"title": "B"},
+        ])
+        apply_fallback_images([section])
+        assert section.items[0]["image_url"].startswith("data:image")
+        assert section.items[1]["image_url"].startswith("https://picsum")
+
+    def test_services_items_get_stock(self):
+        section = Section(type=SectionType.services, title="S", items=[{"title": "X"}])
+        apply_fallback_images([section])
+        assert section.items[0]["image_url"].startswith("https://picsum")

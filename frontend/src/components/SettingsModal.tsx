@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { X, Settings, Monitor, Cloud, Server, RefreshCw, Loader2, AlertCircle, Image } from 'lucide-react'
+import { X, Settings, Monitor, Cloud, Server, RefreshCw, Loader2, AlertCircle, Image, Wifi } from 'lucide-react'
 import api from '../api/client'
+import { checkComfyui } from '../api/client'
 import { useSettings, OPENAI_MODELS, type LLMProvider } from '../hooks/useSettings'
 
 interface SettingsModalProps {
@@ -11,6 +12,29 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
   const { settings, update, localModels, modelsLoading, modelsError, refreshModels } = useSettings()
   const [tab, setTab] = useState<LLMProvider | 'comfyui'>(settings.provider)
   const [comfyStatus, setComfyStatus] = useState<{ comfyui: boolean; npm: boolean } | null>(null)
+  const [checkState, setCheckState] = useState<'idle' | 'busy' | 'ok' | 'fail'>('idle')
+  const [checkMsg, setCheckMsg] = useState<string | null>(null)
+  const [checkpoints, setCheckpoints] = useState<string[]>([])
+
+  const handleComfyCheck = async () => {
+    setCheckState('busy')
+    setCheckMsg(null)
+    setCheckpoints([])
+    try {
+      const res = await checkComfyui(settings.comfyuiUrl)
+      if (res.ok) {
+        setCheckState('ok')
+        setCheckpoints(res.checkpoints || [])
+      } else {
+        setCheckState('fail')
+        setCheckMsg(res.error || 'недоступен')
+      }
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setCheckState('fail')
+      setCheckMsg(detail || 'Ошибка проверки')
+    }
+  }
 
   useEffect(() => {
     if (tab !== 'comfyui') return
@@ -234,13 +258,42 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-text mb-1.5">URL ComfyUI</label>
-                    <input
-                      type="text"
-                      value={settings.comfyuiUrl}
-                      onChange={(e) => update({ comfyuiUrl: e.target.value })}
-                      placeholder="http://127.0.0.1:8188"
-                      className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-text text-sm placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={settings.comfyuiUrl}
+                        onChange={(e) => update({ comfyuiUrl: e.target.value })}
+                        placeholder="http://мой-comfy.example.com:8188"
+                        className="flex-1 px-3 py-2 bg-bg border border-border rounded-lg text-text text-sm placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
+                      />
+                      <button
+                        onClick={handleComfyCheck}
+                        disabled={checkState === 'busy' || !settings.comfyuiUrl}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-surface border border-border rounded-lg text-sm text-text hover:bg-surface-hover transition-colors disabled:opacity-50 shrink-0"
+                      >
+                        {checkState === 'busy' ? <Loader2 size={14} className="animate-spin" /> : <Wifi size={14} />}
+                        Проверить
+                      </button>
+                    </div>
+                    <p className="text-xs text-text-muted mt-1">
+                      Сервер должен иметь доступ к этому адресу: открой ComfyUI извне
+                      (проброс порта, cloudflared tunnel, Tailscale Funnel).
+                    </p>
+                    {checkState === 'ok' && (
+                      <div className="mt-2 px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg text-xs text-green-700">
+                        Доступен ✓{checkpoints.length > 0 && ` — моделей: ${checkpoints.length}`}
+                        {checkpoints.length > 0 && (
+                          <div className="mt-1 text-text-muted text-[11px] max-h-24 overflow-y-auto">
+                            {checkpoints.map((c) => <div key={c}>{c}</div>)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {checkState === 'fail' && checkMsg && (
+                      <div className="mt-2 px-3 py-2 bg-danger/10 border border-danger/30 rounded-lg text-xs text-danger">
+                        {checkMsg}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -256,16 +309,19 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-text mb-1.5">Путь к воркфлоу (JSON)</label>
+                    <label className="block text-sm font-medium text-text mb-1.5">
+                      Путь к воркфлоу на сервере <span className="text-text-muted font-normal">(для владельца)</span>
+                    </label>
                     <input
                       type="text"
                       value={settings.comfyuiWorkflowPath}
                       onChange={(e) => update({ comfyuiWorkflowPath: e.target.value })}
-                      placeholder="C:\Users\you\ComfyUI\workflows\my_txt2img.json"
+                      placeholder="/app/templates/workflows/my_workflow.json"
                       className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-text text-sm placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
                     />
                     <p className="text-xs text-text-muted mt-1">
-                      Путь должен быть внутри разрешённого каталога (COMFYUI_WORKFLOWS_ROOT в .env). Поддерживаются UI- и API-формат экспорта. Если пусто — встроенный шаблон.
+                      Файл на диске сервера (внутри COMFYUI_WORKFLOWS_ROOT). Посетители вместо этого
+                      прикладывают свой workflow-файл на странице генерации.
                     </p>
                   </div>
 

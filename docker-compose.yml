@@ -27,6 +27,9 @@ services:
       # User-supplied workflow paths are whitelisted to this directory only
       COMFYUI_WORKFLOWS_ROOT: /app/templates/workflows
 
+      # Public VDS: reject visitor URLs pointing at internal networks (SSRF)
+      ALLOW_PRIVATE_ENDPOINTS: "false"
+
       # --- Build -----------------------------------------------------------
       TAILWIND_BUILD_ENABLED: "true"
       SERVE_FRONTEND: "true"

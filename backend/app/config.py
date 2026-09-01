@@ -23,9 +23,15 @@ class Settings(BaseSettings):
     image_negative_prompt: str = "blurry, low quality, distorted, deformed, ugly, bad anatomy, watermark, text, logo"
 
     tailwind_build_enabled: bool = True
+    # false on a public VDS: user-supplied service URLs must not point at
+    # internal networks (SSRF protection). true for local dev.
+    allow_private_endpoints: bool = True
 
     serve_frontend: bool = True
     frontend_dist_dir: str = str(Path(__file__).parent.parent.parent / "frontend" / "dist")
+
+    # Anti-phantom guard: a second backend instance fails loudly on this port
+    instance_lock_port: int = 8701
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

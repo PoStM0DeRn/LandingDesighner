@@ -1,7 +1,11 @@
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+# The instance lock (real backend) must not block tests
+os.environ.setdefault("LG_INSTANCE_GUARD", "0")
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:

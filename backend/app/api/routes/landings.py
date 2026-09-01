@@ -258,6 +258,7 @@ def generation_info(landing_id: str, user: str | None = Depends(optional_user)):
         use_llm_markup=bool(state.get("use_llm_markup", False)),
         image_steps=state.get("image_steps"),
         comfyui_workflow_path=state.get("comfyui_workflow_path"),
+        comfyui_url=state.get("comfyui_url"),
         intent=state.get("intent"),
         tokens=state.get("tokens"),
         skills=skills,
@@ -354,6 +355,7 @@ def regenerate_image(
         req,
         workflow_path=state.get("comfyui_workflow_path"),
         steps=state.get("image_steps"),
+        base_url=state.get("comfyui_url"),
     )
     if data_uri is None:
         raise HTTPException(status_code=502, detail="ComfyUI unavailable or generation failed")

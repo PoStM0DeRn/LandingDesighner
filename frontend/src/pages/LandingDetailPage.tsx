@@ -31,6 +31,7 @@ interface Progress {
   message: string
   images_done: number
   images_total: number
+  notice?: string
 }
 
 function progressWidth(p: Progress | null): string {
@@ -319,6 +320,9 @@ export default function LandingDetailPage() {
                   Изображений: {progress.images_done}/{progress.images_total}
                 </p>
               ) : null}
+              {progress?.notice && (
+                <p className="text-amber-300 text-xs mt-2 max-w-md text-center">{progress.notice}</p>
+              )}
               <div className="w-56 h-1.5 bg-white/20 rounded-full mt-4 overflow-hidden">
                 <div
                   className="h-full bg-white/80 rounded-full transition-all duration-700"

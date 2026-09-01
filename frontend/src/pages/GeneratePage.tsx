@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Send, Upload, X, Loader2, AlertCircle, Settings, Lock, LogIn } from 'lucide-react'
+import { Send, Upload, X, Loader2, AlertCircle, Settings, Lock, LogIn, Image as ImageIcon } from 'lucide-react'
 import { generateLanding } from '../api/client'
 import { useSettings } from '../hooks/useSettings'
 import { useAuth } from '../hooks/useAuth'
@@ -15,6 +15,8 @@ export default function GeneratePage() {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState('')
   const [brandbook, setBrandbook] = useState<File | null>(null)
+  const [workflow, setWorkflow] = useState<File | null>(null)
+  const wfInputRef = useRef<HTMLInputElement>(null)
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [useLlmMarkup, setUseLlmMarkup] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -44,6 +46,8 @@ export default function GeneratePage() {
         apiKey: settings.provider === 'openai' ? settings.openaiKey : undefined,
         skillIds: selectedSkills,
         comfyuiWorkflowPath: settings.comfyuiWorkflowPath || undefined,
+        comfyuiUrl: settings.comfyuiUrl || undefined,
+        workflow: workflow || undefined,
         imageSteps: settings.imageSteps,
         useLlmMarkup,
       })
@@ -156,6 +160,50 @@ export default function GeneratePage() {
             Выберите инструкции для улучшения генерации
           </p>
           <SkillsSelector selected={selectedSkills} onChange={setSelectedSkills} />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text mb-2">
+            Workflow ComfyUI (опционально)
+          </label>
+          <div
+            onClick={() => wfInputRef.current?.click()}
+            className="border-2 border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
+          >
+            {workflow ? (
+              <div className="flex items-center justify-center gap-3">
+                <ImageIcon size={20} className="text-primary" />
+                <span className="text-text text-sm">{workflow.name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setWorkflow(null)
+                  }}
+                  className="p-1 rounded hover:bg-surface-hover transition-colors"
+                >
+                  <X size={14} className="text-text-muted" />
+                </button>
+              </div>
+            ) : (
+              <p className="text-text-muted text-sm">
+                Приложи свой txt2img workflow (JSON, UI- или API-формат ComfyUI)
+              </p>
+            )}
+          </div>
+          <input
+            ref={wfInputRef}
+            type="file"
+            accept=".json"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) setWorkflow(f)
+            }}
+            className="hidden"
+          />
+          <p className="text-xs text-text-muted mt-1">
+            Изображения будут рендериться на ComfyUI по URL из настроек.
+          </p>
         </div>
 
         <div>

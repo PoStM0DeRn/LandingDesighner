@@ -44,6 +44,7 @@ def _persist_state(state: LandingState, title: str) -> None:
         "provider": state.get("provider"),
         "model": state.get("model"),
         "use_llm_markup": state.get("use_llm_markup", False),
+        "comfyui_url": state.get("comfyui_url"),
         "intent": state["intent"].model_dump() if state.get("intent") else None,
         "sections": sections_data,
         "tokens": state["design_tokens"].model_dump() if state.get("design_tokens") else None,
@@ -67,6 +68,7 @@ class LandingState(TypedDict):
     skills: list[Skill]
 
     comfyui_workflow_path: str | None
+    comfyui_url: str | None
     image_steps: int
     use_llm_markup: bool
 
@@ -157,7 +159,8 @@ def node_generate_images(state: LandingState) -> dict:
         workflow_path = state.get("comfyui_workflow_path")
         image_steps = state.get("image_steps", 20)
         sections = generate_images_sync(
-            sections, workflow_path=workflow_path, steps=image_steps, landing_id=state["landing_id"],
+            sections, workflow_path=workflow_path, steps=image_steps,
+            landing_id=state["landing_id"], comfyui_url=state.get("comfyui_url"),
         )
         return {"sections": sections}
     except Exception as e:
@@ -301,6 +304,7 @@ def run_generation(
     comfyui_workflow_path: str | None = None,
     image_steps: int = 20,
     use_llm_markup: bool = False,
+    comfyui_url: str | None = None,
 ) -> None:
     initial_state: LandingState = {
         "landing_id": landing_id,
@@ -314,6 +318,7 @@ def run_generation(
         "api_key": api_key,
         "skills": skills or [],
         "comfyui_workflow_path": comfyui_workflow_path,
+        "comfyui_url": comfyui_url,
         "image_steps": image_steps,
         "use_llm_markup": use_llm_markup,
         "intent": None,

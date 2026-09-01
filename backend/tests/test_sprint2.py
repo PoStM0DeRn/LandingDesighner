@@ -104,6 +104,12 @@ class TestProgress:
         assert p["message"] == "x"
         assert p["images_done"] == 2 and p["images_total"] == 5
 
+        # notice survives stage changes
+        progress_tracker.update("t1", notice="ComfyUI недоступен", stage="assemble")
+        p = progress_tracker.get("t1")
+        assert p["notice"] == "ComfyUI недоступен"
+        assert p["message"] == "Сборка HTML"
+
         progress_tracker.finish("t1", "ready")
         p = progress_tracker.get("t1")
         assert p["done"] is True and p["status"] == "ready" and p["stage"] == "done"

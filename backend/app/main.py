@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from app.api.routes import auth, generate, landings, models, skills
+from app.api.routes import auth, comfyui, generate, landings, models, skills
 from app.config import settings
 
 # --- logging: console + rotating file --------------------------------------
@@ -36,6 +36,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(comfyui.router)
 app.include_router(landings.router)
 app.include_router(generate.router)
 app.include_router(models.router)
@@ -91,6 +92,13 @@ if settings.serve_frontend and _dist.exists():
 
 
 # --- startup tasks -----------------------------------------------------------
+
+@app.on_event("startup")
+def acquire_instance_lock() -> None:
+    from app.core.instance_lock import acquire_instance_lock as _acquire
+
+    _acquire()  # raises RuntimeError if another instance already runs
+
 
 @app.on_event("startup")
 def recover_orphaned_generations() -> None:

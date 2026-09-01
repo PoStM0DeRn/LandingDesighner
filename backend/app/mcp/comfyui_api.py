@@ -71,6 +71,23 @@ class ComfyUIClient:
             r.raise_for_status()
             return r.content
 
+    async def list_checkpoints(self) -> list[str]:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.get(f"{self.base_url}/object_info/CheckpointLoaderSimple")
+                r.raise_for_status()
+                data = r.json()
+                ckpts = (
+                    data.get("CheckpointLoaderSimple", {})
+                    .get("input", {})
+                    .get("required", {})
+                    .get("ckpt_name", [[]])[0]
+                )
+                return ckpts
+        except Exception as e:
+            logger.warning("list_checkpoints failed: %s", e)
+            return []
+
     async def generate(self, workflow: dict) -> str:
         prompt_id = await self.queue_prompt(workflow)
         result = await self.wait_for_completion(prompt_id)

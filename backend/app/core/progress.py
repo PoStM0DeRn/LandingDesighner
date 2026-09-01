@@ -34,6 +34,7 @@ def update(
     message: str | None = None,
     images_done: int | None = None,
     images_total: int | None = None,
+    notice: str | None = None,
 ) -> None:
     with _lock:
         p = _state.get(landing_id)
@@ -48,6 +49,8 @@ def update(
             p["images_done"] = images_done
         if images_total is not None:
             p["images_total"] = images_total
+        if notice is not None:
+            p["notice"] = notice
 
 
 def finish(landing_id: str, status: str, error: str | None = None) -> None:

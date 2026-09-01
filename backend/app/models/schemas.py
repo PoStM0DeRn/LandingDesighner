@@ -156,6 +156,7 @@ class GenerationInfo(BaseModel):
     use_llm_markup: bool = False
     image_steps: Optional[int] = None
     comfyui_workflow_path: Optional[str] = None
+    comfyui_url: Optional[str] = None
     intent: Optional[dict] = None
     tokens: Optional[dict] = None
     skills: list[GenerationSkillInfo] = Field(default_factory=list)
