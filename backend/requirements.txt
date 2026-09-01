@@ -1,0 +1,18 @@
+fastapi>=0.115
+uvicorn[standard]>=0.34
+langgraph>=0.2
+openai>=1.60
+pydantic>=2.0
+pydantic-settings>=2.0
+python-multipart
+aiofiles
+pymupdf
+pyyaml
+jinja2
+httpx
+mcp>=2.1
+Pillow>=10
+playwright>=1.49
+
+# Dev / tests
+pytest>=8

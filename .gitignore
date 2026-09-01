@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Node / frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# Environment & secrets
+.env
+backend/.env
+
+# Runtime data (landings, users, sessions, logs, thumbnails)
+storage/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db

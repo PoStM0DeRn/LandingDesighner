@@ -1,0 +1,38 @@
+services:
+  app:
+    build: .
+    image: landing-generator
+    container_name: landing-generator
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - lg-data:/data
+    environment:
+      # --- LLM -------------------------------------------------------------
+      # LM Studio on the GPU box (home machine). On a Linux VDS
+      # host.docker.internal resolves to the Docker host (see extra_hosts).
+      # Point it at any OpenAI-compatible endpoint, or set OPENAI_API_KEY
+      # to use the cloud fallback instead of a local model.
+      LM_STUDIO_URL: ${LM_STUDIO_URL:-http://host.docker.internal:1234/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+      # --- Images ----------------------------------------------------------
+      # ComfyUI API (usually on the GPU box too). If unreachable, the
+      # pipeline falls back to stock images automatically.
+      COMFYUI_URL: ${COMFYUI_URL:-http://host.docker.internal:8188}
+      IMAGE_GENERATION_ENABLED: ${IMAGE_GENERATION_ENABLED:-true}
+      IMAGE_DEFAULT_STEPS: ${IMAGE_DEFAULT_STEPS:-8}
+
+      # User-supplied workflow paths are whitelisted to this directory only
+      COMFYUI_WORKFLOWS_ROOT: /app/templates/workflows
+
+      # --- Build -----------------------------------------------------------
+      TAILWIND_BUILD_ENABLED: "true"
+      SERVE_FRONTEND: "true"
+    extra_hosts:
+      # Linux: makes host.docker.internal reach services on the VDS host
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  lg-data:

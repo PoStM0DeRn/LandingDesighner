@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ meta_description }}">
+  <meta property="og:title" content="{{ title }}">
+  <meta property="og:description" content="{{ meta_description }}">
+  <meta property="og:type" content="website">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family={{ heading_font | urlencode }}:wght@400;600;700&family={{ body_font | urlencode }}:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '{{ primary_color }}',
+            secondary: '{{ secondary_color }}',
+            accent: '{{ accent_color }}',
+            surface: '{{ bg_color }}',
+            'surface-alt': '{{ surface_alt }}',
+          },
+          fontFamily: {
+            heading: ['{{ heading_font }}', 'sans-serif'],
+            body: ['{{ body_font }}', 'sans-serif'],
+          },
+          borderRadius: {
+            DEFAULT: '{{ border_radius }}',
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: '{{ body_font }}', sans-serif; color: {{ text_color }}; background: {{ bg_color }}; }
+    h1, h2, h3, h4, h5, h6 { font-family: '{{ heading_font }}', sans-serif; }
+    .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
+    .faq-answer.open { max-height: 500px; padding-top: 0.5rem; }
+    .faq-chevron { transition: transform 0.3s ease; }
+    .faq-chevron.open { transform: rotate(180deg); }
+    .mobile-menu { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+    .mobile-menu.open { max-height: 400px; }
+  </style>
+</head>
+<body class="antialiased">
+{{ content }}
+<script>
+(function(){
+  document.querySelectorAll('[data-faq-toggle]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var answer = btn.nextElementSibling;
+      var chevron = btn.querySelector('.faq-chevron');
+      answer.classList.toggle('open');
+      if(chevron) chevron.classList.toggle('open');
+    });
+  });
+  var menuBtn = document.getElementById('mobile-menu-btn');
+  var menuContent = document.getElementById('mobile-menu-content');
+  if(menuBtn && menuContent){
+    menuBtn.addEventListener('click', function(){ menuContent.classList.toggle('open'); });
+  }
+})();
+</script>
+</body>
+</html>

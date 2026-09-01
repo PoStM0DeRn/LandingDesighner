@@ -1,0 +1,26 @@
+# Build context junk
+.git
+.gitignore
+.vscode
+.idea
+
+# Python
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.venv
+venv
+
+# Node
+frontend/node_modules
+
+# Build artifacts (rebuilt inside the image)
+frontend/dist
+
+# Local data & secrets — must never leak into the image
+.env
+backend/.env
+storage/
+
+# Docs that don't belong in the runtime image
+AGENTS.md
